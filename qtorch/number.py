@@ -1,4 +1,4 @@
-__all__ = ["Number", "FixedPoint", "BlockFloatingPoint", "FloatingPoint", "Posit", "Positbf"]
+__all__ = ["Number", "FixedPoint", "BlockFloatingPoint", "FloatingPoint", "Posit", "PositBF16"]
 
 
 class Number:
@@ -128,7 +128,7 @@ class Posit(Number):
     def __repr__(self):
         return "Posit (exponent={:d}, wordlength={:d}, scale={:d})".format(self.es, self.nsize, self.scale)
 
-class Positbf(Number):
+class PositBF16(Number):
     """
     Low-Precision Posit Format which converts between bfloat16.
     TODO: Description here
