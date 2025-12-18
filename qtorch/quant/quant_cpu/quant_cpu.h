@@ -23,6 +23,7 @@ at::Tensor block_quantize_stochastic(at::Tensor a, int wl, int dim);
 at::Tensor float_quantize_stochastic(at::Tensor a, int man_bits, int exp_bits);
 at::Tensor posit_quantize_nearest(at::Tensor a, int nsize, int es, float scale);
 at::Tensor bfloat16_posit8_quantize_nearest(at::Tensor a, int nsize, int es, float scale);
+at::Tensor bfloat16_boundedPosit8_quantize_nearest(at::Tensor a, int nsize, int es, int rs, float scale);
 at::Tensor convert_to_posit(at::Tensor a, int nsize, int es, float scale);
 at::Tensor posit_sigmoid(at::Tensor a, int nsize, int es, float scale);
 at::Tensor posit_tanh(at::Tensor a, int nsize, int es, float scale);

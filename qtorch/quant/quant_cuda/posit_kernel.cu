@@ -164,6 +164,14 @@ __device__ __inline__ fp16 fp32tofp16_gpu(float f) {
   return p;
 }
 
+__device__ __inline__ uint16_t boundedPosit8ToBfloat16_gpu(uint8_t p) {
+return 0;
+}
+
+__device__ __inline__ uint8_t bfloat16ToBoundedPosit8_gpu(uint16_t bf) {
+return 0;
+}
+
 __device__ __inline__ uint16_t posit8ToBfloat16_gpu(uint8_t p) {
 
 	// get sign
@@ -286,6 +294,14 @@ __global__ void posit8_bfloat16_kernel_nearest( uint16_t* input, uint16_t*output
   if (index < input_size) {
     uint8_t temp = bfloat16ToPosit8_gpu(input[index]);
     output[index] = posit8ToBfloat16_gpu(temp);
+  }
+}
+
+__global__ void boundedPosit8_bfloat16_kernel_nearest( uint16_t* input, uint16_t*output, float scale,  size_t input_size) {
+  const int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < input_size) {
+    uint8_t temp = bfloat16ToBoundedPosit8_gpu(input[index]);
+    output[index] = boundedPosit8ToBfloat16_gpu(temp);
   }
 }
 
@@ -539,6 +555,23 @@ void posit8_bfloat16_kernel_nearest_wrapper(uint16_t *__restrict__ a,
     cudaMemcpyToSymbol( int64_constants, &int64_constants_host[0], 2 * sizeof( uint64_t ), 0 );
 
     posit8_bfloat16_kernel_nearest<<<blockNums, blockSize>>>(a,
+                                                     o,
+                                                     scale,
+                                                     size);
+
+}
+
+void boundedPosit8_bfloat16_kernel_nearest_wrapper(uint16_t *__restrict__ a,
+                                    uint16_t *o, int size, int nsize, int es, int rs, float scale, int blockNums, int blockSize){
+
+    uint32_t int32_constants_host[11];
+    uint64_t int64_constants_host[2];
+    generate_posit_constants(nsize, es, int32_constants_host, int64_constants_host );
+
+    cudaMemcpyToSymbol( int32_constants, &int32_constants_host[0], 11 * sizeof( uint32_t ), 0 );
+    cudaMemcpyToSymbol( int64_constants, &int64_constants_host[0], 2 * sizeof( uint64_t ), 0 );
+
+    boundedPosit8_bfloat16_kernel_nearest<<<blockNums, blockSize>>>(a,
                                                      o,
                                                      scale,
                                                      size);

@@ -553,6 +553,35 @@ uint8_t bfloat16ToPosit8(uint16_t bf, uint32_t* int32_constants, uint64_t* int64
 	return p;
 }
 
+/**
+ * Convert a bounded posit of nsize <=8 to a bfloat16 value.
+ *
+ * The conversion is done by reinterpreting the posit8 bits as a bfloat16.
+ * The sign bit of the posit8 is copied to the sign bit of the bfloat16.
+ * The regime and exponent of the posit8 are converted to the bfloat16's exponent
+ * and the rest of the bits are copied to the bfloat16's fraction.
+ *
+ * @param p the posit to be converted
+ * @return the corresponding bfloat16
+ */
+uint16_t boundedPosit8ToBfloat16(uint8_t p, uint32_t* int32_constants, uint64_t* int64_constants) {
+return 0;
+}
+
+/**
+ * @brief Convert a bfloat16 to a bounded posit with nsize <= 8
+ * @param bf the bfloat16 to be converted
+ * @return the corresponding posit
+ *
+ * The conversion is done by reinterpreting the bfloat16 bits as a posit8.
+ * The sign bit of the bfloat16 is copied to the sign bit of the posit8.
+ * The exponent and fraction of the bfloat16 are converted to the posit8's regime and exponent
+ * and the rest of the bits are copied to the posit8's fraction.
+ */
+uint8_t bfloat16ToBoundedPosit8(uint16_t bf, uint32_t* int32_constants, uint64_t* int64_constants) {
+return 0;
+}
+
 Tensor posit_quantize_nearest(Tensor a, int nsize, int es, float scale)
 {
   auto a_array = a.data_ptr<float>();
@@ -596,6 +625,32 @@ Tensor bfloat16_posit8_quantize_nearest(Tensor a, int nsize, int es, float scale
     
     uint8_t temp = bfloat16ToPosit8(temp_input.x, int32_constants, int64_constants);
     uint16_t posit = posit8ToBfloat16(temp, int32_constants, int64_constants);
+
+    std::memcpy(&bf16, &posit, sizeof(bf16));
+    o_array[i] = torch::BFloat16(float(bf16) / scale);
+  }
+
+  return o;
+}
+
+
+Tensor bfloat16_boundedPosit8_quantize_nearest(Tensor a, int nsize, int es, int rs, float scale)
+{
+  auto a_array = a.data_ptr<torch::BFloat16>();
+  auto o = torch::zeros_like(a);
+  auto o_array = o.data_ptr<torch::BFloat16>();
+  int size = a.numel();
+  uint32_t int32_constants[11];
+  uint64_t int64_constants[2];
+
+  generate_posit_constants(nsize, es, int32_constants, int64_constants);
+  torch::BFloat16 bf16;
+  for (int64_t i = 0; i < size; i++)
+  {
+    auto temp_input = torch::BFloat16(float(a_array[i]) * scale);
+
+    uint8_t temp = bfloat16ToBoundedPosit8(temp_input.x, int32_constants, int64_constants);
+    uint16_t posit = boundedPosit8ToBfloat16(temp, int32_constants, int64_constants);
 
     std::memcpy(&bf16, &posit, sizeof(bf16));
     o_array[i] = torch::BFloat16(float(bf16) / scale);
@@ -991,6 +1046,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
   m.def("float_quantize_nearest", &float_quantize_nearest, "Low-Bitwidth Floating Point Number Nearest Neighbor Quantization (CPU)");
   m.def("posit_quantize_nearest", &posit_quantize_nearest, "Low-Bitwidth Posit Quantization (CPU)");
   m.def("bfloat16_posit8_quantize_nearest", &bfloat16_posit8_quantize_nearest, "Low-Bitwidth (>= 8) Posit Quantization for bfloat16 (CPU)");
+  m.def("bfloat16_boundedPosit8_quantize_nearest", &bfloat16_boundedPosit8_quantize_nearest, "Low-Bitwidth (>= 8) Bounded Posit Quantization for bfloat16 (CPU)");
   m.def("posit_sigmoid", &posit_sigmoid, "Low-Bitwidth Posit Sigmoid (CPU)");
   m.def("posit_tanh", &posit_tanh, "Low-Bitwidth Posit Tanh (CPU)");
   m.def("posit_tanh_enhanced", &posit_tanh_enhanced, "Low-Bitwidth Posit Tanh (CPU)");

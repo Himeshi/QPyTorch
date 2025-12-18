@@ -88,6 +88,8 @@ Tensor posit_quantize_nearest_cuda(Tensor a, int nsize, int es, float scale);
 
 Tensor bfloat16_posit8_quantize_nearest_cuda(Tensor a, int nsize, int es, float scale);
 
+Tensor bfloat16_boundedPosit8_quantize_nearest_cuda(Tensor a, int nsize, int es, int rs, float scale);
+
 Tensor newformat_quantize_nearest_cuda(Tensor a, float scale);
 
 Tensor actformat_quantize_nearest_cuda(Tensor a, float scale);

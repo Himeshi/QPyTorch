@@ -1,5 +1,5 @@
 import torch
-from qtorch import Number, FixedPoint, BlockFloatingPoint, FloatingPoint, Posit, PositBF16
+from qtorch import Number, FixedPoint, BlockFloatingPoint, FloatingPoint, Posit, PositBF16, BoundedPosit
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
@@ -124,6 +124,10 @@ def quantizer(
                 forward_quant = lambda x, quant_module: quant_module.bfloat16_posit8_quantize_nearest(
                     x, forward_number.nsize, forward_number.es, forward_number.scale
                 )
+            elif type(forward_number) == BoundedPosit:
+                forward_quant = lambda x, quant_module: quant_module.bfloat16_boundedPosit8_quantize_nearest(
+                    x, forward_number.nsize, forward_number.es, forward_number.rs, forward_number.scale
+                )
         elif forward_rounding == "stochastic":
             if type(forward_number) == BlockFloatingPoint:
                 forward_quant = lambda x, quant_module: quant_module.block_quantize_stochastic(
@@ -144,6 +148,10 @@ def quantizer(
             elif type(forward_number) == PositBF16:
                 forward_quant = lambda x, quant_module: quant_module.bfloat16_posit8_quantize_nearest(
                     x, forward_number.nsize, forward_number.es, forward_number.scale
+                )
+            elif type(forward_number) == BoundedPosit:
+                forward_quant = lambda x, quant_module: quant_module.bfloat16_boundedPosit8_quantize_nearest(
+                    x, forward_number.nsize, forward_number.es, forward_number.rs, forward_number.scale
                 )
         else:
             forward_quant = lambda x, quant_module: x
@@ -186,6 +194,10 @@ def quantizer(
             backward_quant = lambda a, quant_module: quant_module.bfloat16_posit8_quantize_nearest(
                 a, backward_number.nsize, backward_number.es, backward_number.scale
             )
+        elif type(backward_number) == BoundedPosit:
+            backward_quant = lambda a, quant_module: quant_module.bfloat16_boundedPosit8_quantize_nearest(
+                a, backward_number.nsize, backward_number.es, backward_number.rs, backward_number.scale
+            )
         else:
             backward_quant = lambda a, quant_module: a
 
@@ -209,6 +221,10 @@ def quantizer(
         elif type(backward_number) == PositBF16:
             backward_quant = lambda a, quant_module: quant_module.bfloat16_posit8_quantize_nearest(
                 a, backward_number.nsize, backward_number.es, backward_number.scale
+            )
+        elif type(backward_number) == BoundedPosit:
+            backward_quant = lambda a, quant_module: quant_module.bfloat16_boundedPosit8_quantize_nearest(
+                a, backward_number.nsize, backward_number.es, backward_number.rs, backward_number.scale
             )
         else:
             backward_quant = lambda a, quant_module: a
@@ -403,6 +419,32 @@ def bfloat16_posit8_quantize(x, nsize, es, scale = 1.0, rounding="nearest"):
         out = quant_module.bfloat16_posit8_quantize_nearest(x.contiguous(), nsize, es, scale)
     elif rounding == "stochastic":
         out = quant_module.bfloat16_posit8_quantize_nearest(x.contiguous(), nsize, es, scale) #todo; temporarily use nearest rounding at all time
+    else:
+        out = x
+    return out
+
+def bfloat16_boundedPosit8_quantize(x, nsize = 8, es = 3, rs = 6, scale = 1.0, rounding="nearest"):
+    """
+    Quantize a bfloat16 Floating Point into 8-bit or lower precision Floating Point
+
+    Args:
+        - :attr: `x` (torch.Tensor) : the bf16 (torch.Tensor) to be quantized
+        - :attr: `nsize` (int) : number of bits allocated for the posit format
+        - :attr: `es` (int) : number of bits allocated for es field (exponent)
+        - :attr: `rounding` (string) : rounding mode, \"stochastic\" or \"nearest\"
+        - default rounding: `nearest` because it is easier to implement on hardware
+        - conventional: posit(8,2): 8 bits posit with 2 bits exponent es
+
+    Returns:
+        - a quantized low-precision posit tensor (torch.Tensor)
+    """
+    assert isinstance(x, torch.Tensor), "x is not an instance of Tensor"
+    assert rounding in ["stochastic", "nearest"], "invalid rounding mode, {}".format(rounding)
+    quant_module = get_module(x)
+    if rounding == "nearest":
+        out = quant_module.bfloat16_boundedPosit8_quantize_nearest(x.contiguous(), nsize, es, rs, scale)
+    elif rounding == "stochastic":
+        out = quant_module.bfloat16_boundedPosit8_quantize_nearest(x.contiguous(), nsize, es, rs, scale) #todo; temporarily use nearest rounding at all time
     else:
         out = x
     return out
