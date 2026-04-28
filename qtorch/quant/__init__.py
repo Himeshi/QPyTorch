@@ -7,6 +7,7 @@ __all__ = [
     "float_quantize",
     "posit_quantize",
     "bfloat16_posit8_quantize",
+    "bfloat16_boundedPosit8_quantize",
     "convert_to_posit",
     "quantizer",
     "Quantizer",

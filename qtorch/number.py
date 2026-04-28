@@ -143,7 +143,7 @@ class BoundedPosit(Number):
     def __init__(self, nsize, es, rs, scale=1.0):
         assert 3 >= es > 0, "invalid bits for exponent:{}".format(es)
         assert 8 >= nsize > 0, "invalid bits for wordlength:{}".format(nsize)
-        assert 6 >= rs > 0, "invalid bits for regime size:{}".format(rs)
+        assert 7 >= rs > 0, "invalid bits for regime size:{}".format(rs)
 
         self.nsize = nsize
         self.es = es

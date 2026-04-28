@@ -51,7 +51,7 @@ if torch.cuda.is_available():
 else:
     quant_cuda = quant_cpu
 
-__all__ = ["fixed_point_quantize", "block_quantize", "float_quantize", "quantizer", "posit_quantize", "bfloat16_posit8_quantize", "convert_to_posit", "posit_sigmoid", "posit_tanh", "posit_tanh_enhanced", "new_format_quantize", "act_format_quantize", "configurable_table_quantize", "configurable_table_quantize_rounding_hint", "configurable_table_quantize_geomean"]
+__all__ = ["fixed_point_quantize", "block_quantize", "float_quantize", "quantizer", "posit_quantize", "bfloat16_posit8_quantize", "bfloat16_boundedPosit8_quantize", "convert_to_posit", "posit_sigmoid", "posit_tanh", "posit_tanh_enhanced", "new_format_quantize", "act_format_quantize", "configurable_table_quantize", "configurable_table_quantize_rounding_hint", "configurable_table_quantize_geomean"]
 
 
 def assert_wl_fl(wl, fl, stage=""):

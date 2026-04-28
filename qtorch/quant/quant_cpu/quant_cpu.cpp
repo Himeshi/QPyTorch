@@ -375,6 +375,30 @@ void generate_posit_constants(int nsize, int es, uint32_t* int32_constants, uint
   }
 };
 
+void generate_bounded_posit_constants(int nsize, int es, int rs, uint32_t* int32_constants, uint64_t* int64_constants) {
+  //local vars have the same name as global constant vars, confusing but less likely error can happen here.
+  //ugly but it's the traightforward conversion from the original #define macroes;
+  //todo: make this one less messy
+  _G_NBITS = nsize;
+  _G_ESIZE = es;
+  if (nsize <= 16 ) {
+    _G_POSIT_SHIFT_AMOUNT = FP16_LIMB_SIZE - nsize;
+    _G_MAXREALP = ((1 << (nsize - 1)) - 1) << _G_POSIT_SHIFT_AMOUNT;
+    _G_MINREALP = 1 << _G_POSIT_SHIFT_AMOUNT;
+    POSIT_EXTRA_BITS_SHIFT = UNSIGNED_LONG_LONG_SIZE - nsize + 1;
+    POSIT_EXTRA_BITS_MASK = (1UL << (UNSIGNED_LONG_LONG_SIZE - nsize)) - 1;
+    POSIT_HALFWAY_BIT_MASK = 1UL << (UNSIGNED_LONG_LONG_SIZE - nsize);
+    _G_USEED = 1 << (1 << es);
+    _G_USEED_ZEROS = (1 << es);
+    POSIT_EXPONENT_MASK = _G_USEED_ZEROS - 1;
+    _G_MAXREAL_INT = (((_G_USEED_ZEROS * (rs - 1)) + SINGLE_PRECISION_BIAS + es) << FLOAT_EXPONENT_SHIFT) | (((1 << (nsize - 1 - rs - es)) - 1) << 20);
+    _G_MINREAL_INT = ((SINGLE_PRECISION_BIAS - (_G_USEED_ZEROS * rs)) << FLOAT_EXPONENT_SHIFT) | (1 << 20);
+  } else {
+    printf("unexpected posit config\n");
+    exit(1);
+  }
+};
+
 float fp16tofp32(fp16 p, uint32_t* int32_constants, uint64_t* int64_constants) {
 	union Bits v;
 
@@ -481,10 +505,10 @@ uint16_t posit8ToBfloat16(uint8_t p, uint32_t* int32_constants, uint64_t* int64_
 	// get regime
 	uint32_t bf_temp = p << 25; // 32 - 8 + 1(sign) 
 	int regime_length;
-	  if(regime_sign)
-	    regime_length = (__builtin_clz(~bf_temp));
-	  else
-	    regime_length = (__builtin_clz(bf_temp));
+  if(regime_sign)
+    regime_length = (__builtin_clz(~bf_temp));
+  else
+    regime_length = (__builtin_clz(bf_temp));
   int regime = (regime_length - regime_sign) << _G_ESIZE;
 	regime = (regime ^ -regime_sign) + regime_sign;
 
@@ -513,7 +537,7 @@ uint16_t posit8ToBfloat16(uint8_t p, uint32_t* int32_constants, uint64_t* int64_
  */
 uint8_t bfloat16ToPosit8(uint16_t bf, uint32_t* int32_constants, uint64_t* int64_constants) {
   assert(_G_NBITS <= 8);
-  uint8_t p = 0;
+  uint16_t p = 0;
 	bool sign = bf & 0x8000;
 	bf &= 0x7FFF;
 
@@ -538,7 +562,7 @@ uint8_t bfloat16ToPosit8(uint16_t bf, uint32_t* int32_constants, uint64_t* int64
 	//assemble
 	regime_and_exp <<= (16 - regime_and_exp_length);
 	regime_and_exp |= ((bf & 0x007f) << (9 - regime_and_exp_length)); // 16 - 7 = 9
-	uint8_t temp_p = (regime_and_exp >> (17 - _G_NBITS)); // POSIT_EXTRA_BITS_SHIFT = 16 - nsize + 1 = 9
+	uint16_t temp_p = (regime_and_exp >> (17 - _G_NBITS)); // POSIT_EXTRA_BITS_SHIFT = 16 - nsize + 1 = 9
 
 	//round
   uint16_t mask = (1 << (16 - _G_NBITS));
@@ -546,11 +570,12 @@ uint8_t bfloat16ToPosit8(uint16_t bf, uint32_t* int32_constants, uint64_t* int64
   if (_G_NBITS != 8)
     temp_p <<= (8 - _G_NBITS);
 
+  temp_p <<= 8;
 	p ^= (temp_p ^ p) & -(((bf << 16) < _G_MAXREAL_INT) & ((bf << 16) > _G_MINREAL_INT));
 
 	p = (p ^ -sign) + sign;
 
-	return p;
+	return (p >> 8);
 }
 
 /**
@@ -564,8 +589,46 @@ uint8_t bfloat16ToPosit8(uint16_t bf, uint32_t* int32_constants, uint64_t* int64
  * @param p the posit to be converted
  * @return the corresponding bfloat16
  */
-uint16_t boundedPosit8ToBfloat16(uint8_t p, uint32_t* int32_constants, uint64_t* int64_constants) {
-return 0;
+uint16_t boundedPosit8ToBfloat16(uint8_t p, uint32_t* int32_constants, uint64_t* int64_constants, int rs) {
+  assert(_G_NBITS <= 8);
+  assert(rs > 1);
+
+	// get sign
+	bool sign = p & 0x80;
+	p = (p ^ -sign) + sign;
+  
+	// get the regime sign
+	bool regime_sign = p & 0x40;
+  
+	// get regime
+  int regime_length;
+  uint8_t rs_regime = p >> (_G_NBITS - rs - 1);
+  if (rs_regime == 0 || rs_regime == ((1 << rs) - 1)) {
+    regime_length = rs;
+  } else {
+    uint32_t bf_temp = p << 25; // 32 - 8 + 1(sign) 
+    if(regime_sign)
+      regime_length = (__builtin_clz(~bf_temp));
+    else
+      regime_length = (__builtin_clz(bf_temp));
+  }
+  int regime = (regime_length - regime_sign) << _G_ESIZE;
+  printf("1 regime: %d, regime_length: %d\n", regime, regime_length);
+	regime = (regime ^ -regime_sign) + regime_sign;
+  printf("2 regime: %d, regime_length: %d\n", regime, regime_length);
+
+	// assemble
+	uint16_t bf = p << (16 - _G_NBITS + 1);
+	bf <<= regime_length;
+	bf >>= (9 - _G_ESIZE); // sign + exponent = 9 for bfloat16
+  printf("bf: %d\n", bf);
+	bf += ((SINGLE_PRECISION_BIAS - regime) << 7); //bfloat16 has 7 bits of fraction
+  
+	bf ^= (0x7F80 ^ bf) & -(p == 128);
+	bf ^= (0 ^ bf) & -(p == 0);
+  
+	bf |= (sign << 15);
+	return bf;
 }
 
 /**
@@ -578,8 +641,67 @@ return 0;
  * The exponent and fraction of the bfloat16 are converted to the posit8's regime and exponent
  * and the rest of the bits are copied to the posit8's fraction.
  */
-uint8_t bfloat16ToBoundedPosit8(uint16_t bf, uint32_t* int32_constants, uint64_t* int64_constants) {
-return 0;
+uint8_t bfloat16ToBoundedPosit8(uint16_t bf, uint32_t* int32_constants, uint64_t* int64_constants, int rs) {
+  assert(_G_NBITS <= 8);
+  assert(rs > 1);
+
+  uint16_t p = 0;
+	bool sign = bf & 0x8000;
+	bf &= 0x7FFF;
+
+	p ^= (p ^_G_MAXREALP) & -((bf << 16) >= _G_MAXREAL_INT);
+	p ^= (p ^ _G_INFP) & -(bf >= 0x7F80);
+	p ^= (p ^ _G_MINREALP) & -(bf != 0 && ((bf << 16) <= _G_MINREAL_INT));
+  printf("p: %hu %d %d\n", p, _G_MAXREALP, -((bf << 16) >= _G_MAXREAL_INT));
+
+	// min posit exponent in 16, 3 is 112
+	// therefore all the float subnormals will be handled
+	// in the previous if statement
+  
+	// get exponent sign
+	bool exp_sign = !(bf >> 14);
+  
+	//get regime and exponent
+	uint16_t exp = abs((bf >> 7) - 127);
+  uint16_t regime_and_exp = 0;
+  int regime_and_exp_length = 0;
+  int regime = exp >> _G_ESIZE;
+  if(regime != (rs - 1)) {
+    regime_and_exp = (((1 << ((exp >> _G_ESIZE) + 1)) - 1) << (_G_ESIZE + 1)) | (exp & POSIT_EXPONENT_MASK);
+    //if exponent is negative
+    regime_and_exp = ((regime_and_exp ^ -exp_sign) + exp_sign) >> ((exp_sign & !((exp & POSIT_EXPONENT_MASK))) & (bool) exp);
+    regime_and_exp_length = (exp >> _G_ESIZE) + 2 + _G_ESIZE - ((exp_sign & !((exp & POSIT_EXPONENT_MASK))) & (bool) exp);
+  } else {
+    regime_and_exp = (((1 << ((exp >> _G_ESIZE) + 1)) - 1) << _G_ESIZE) | (exp & POSIT_EXPONENT_MASK);
+    //if exponent is negative
+    regime_and_exp = ((regime_and_exp ^ -exp_sign) + exp_sign) >> ((exp_sign & !((exp & POSIT_EXPONENT_MASK))) & (bool) exp);
+    regime_and_exp_length = (exp >> _G_ESIZE) + 2 + _G_ESIZE - ((exp_sign & !((exp & POSIT_EXPONENT_MASK))) & (bool) exp);
+    regime_and_exp_length -= 1;
+  }
+
+	//assemble
+	regime_and_exp <<= (16 - regime_and_exp_length);
+	regime_and_exp |= ((bf & 0x007f) << (9 - regime_and_exp_length)); // 16 - 7 = 9
+  uint16_t temp_p = (regime_and_exp >> (17 - _G_NBITS)); // POSIT_EXTRA_BITS_SHIFT = 16 - nsize + 1 = 9
+  printf("temp_p: %d\n", temp_p);
+  
+	//round
+  uint16_t mask = (1 << (16 - _G_NBITS));
+	temp_p += (bool) (regime_and_exp & mask) && ((temp_p & 1) | (regime_and_exp & (mask - 1)));
+  printf("1 temp_p: %d\n", temp_p);
+  if (_G_NBITS != 8)
+    temp_p <<= (8 - _G_NBITS);
+  
+  temp_p <<= 8;
+  printf("2 temp_p: %d\n", temp_p);
+	p ^= (temp_p ^ p) & -(((bf << 16) < _G_MAXREAL_INT) & ((bf << 16) > _G_MINREAL_INT));
+  printf("3 bf: %d %d %d \n", (bf << 16), _G_MAXREAL_INT, _G_MINREAL_INT);
+  printf("4 p: %d\n", p);
+  
+	p = (p ^ -sign) + sign;
+  printf("5 p: %d\n", p);
+
+	return (p >> 8);
 }
 
 Tensor posit_quantize_nearest(Tensor a, int nsize, int es, float scale)
@@ -633,7 +755,6 @@ Tensor bfloat16_posit8_quantize_nearest(Tensor a, int nsize, int es, float scale
   return o;
 }
 
-
 Tensor bfloat16_boundedPosit8_quantize_nearest(Tensor a, int nsize, int es, int rs, float scale)
 {
   auto a_array = a.data_ptr<torch::BFloat16>();
@@ -643,15 +764,20 @@ Tensor bfloat16_boundedPosit8_quantize_nearest(Tensor a, int nsize, int es, int 
   uint32_t int32_constants[11];
   uint64_t int64_constants[2];
 
-  generate_posit_constants(nsize, es, int32_constants, int64_constants);
+  generate_bounded_posit_constants(nsize, es, rs, int32_constants, int64_constants);
   torch::BFloat16 bf16;
   for (int64_t i = 0; i < size; i++)
   {
     auto temp_input = torch::BFloat16(float(a_array[i]) * scale);
 
-    uint8_t temp = bfloat16ToBoundedPosit8(temp_input.x, int32_constants, int64_constants);
-    uint16_t posit = boundedPosit8ToBfloat16(temp, int32_constants, int64_constants);
-
+    uint8_t temp = bfloat16ToBoundedPosit8(temp_input.x, int32_constants, int64_constants, rs);
+    printf("temp: %d\n", temp);
+    std::bitset<8> binary(temp);
+    std::string binary_str = binary.to_string();
+    std::cout << float(a_array[i])<< " " << binary_str << " temp:" << int(temp) << std::endl;
+  
+    uint16_t posit = boundedPosit8ToBfloat16(temp, int32_constants, int64_constants, rs);
+    std::cout << "posit:" << posit << std::endl;
     std::memcpy(&bf16, &posit, sizeof(bf16));
     o_array[i] = torch::BFloat16(float(bf16) / scale);
   }
